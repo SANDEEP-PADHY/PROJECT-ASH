@@ -14,7 +14,6 @@ import subprocess
 import string
 import datetime
 from pathlib import Path
-
 import psutil
 import wmi
 from PyQt5 import QtWidgets, QtGui, QtCore
@@ -257,45 +256,41 @@ class WipeWorker(QtCore.QObject):
                 step_update("Simulation: Creating junk archive ...", steps[4][1])
                 step_update("Simulation: Final format ...", steps[5][1])
             else:
-                # 2: Scramble files (XOR small chunks) for accessible volumes
-                step_update("Scrambling files (best-effort)...", steps[1][1])
+                # 2: Securely overwrite files (write random data over entire file)
+                step_update("Overwriting files with random data...", steps[1][1])
                 if ":" in device and os.path.exists(device):
-                    # walk files and XOR-first-byte pattern (fast approach)
-                    try:
-                        for root, dirs, files in os.walk(device, topdown=False):
-                            for fname in files:
-                                fpath = os.path.join(root, fname)
-                                try:
-                                    with open(fpath, "r+b") as f:
-                                        chunk = f.read(4096)
-                                        if not chunk:
-                                            continue
-                                        key = os.urandom(1)[0]
-                                        scrambled = bytes([b ^ key for b in chunk])
+                    for root, dirs, files in os.walk(device, topdown=False):
+                        for fname in files:
+                            fpath = os.path.join(root, fname)
+                            try:
+                                size = os.path.getsize(fpath)
+                                with open(fpath, "r+b") as f:
+                                    for _ in range(self.passes):
                                         f.seek(0)
-                                        f.write(scrambled)
-                                except Exception:
-                                    pass
-                    except Exception:
-                        pass
+                                        f.write(os.urandom(size))
+                                        f.flush()
+                                self.status.emit(f"Overwritten: {fpath}")
+                            except Exception as e:
+                                self.status.emit(f"Error overwriting {fpath}: {e}")
 
                 # 3: Delete files & try to remove partitions if raw/physical
                 step_update("Deleting files & metadata (best-effort)...", steps[2][1])
                 if ":" in device and os.path.exists(device):
-                    try:
-                        for root, dirs, files in os.walk(device, topdown=False):
-                            for fname in files:
-                                try:
-                                    os.remove(os.path.join(root, fname))
-                                except Exception:
-                                    pass
-                            for d in dirs:
-                                try:
-                                    shutil.rmtree(os.path.join(root, d))
-                                except Exception:
-                                    pass
-                    except Exception:
-                        pass
+                    for root, dirs, files in os.walk(device, topdown=False):
+                        for fname in files:
+                            fpath = os.path.join(root, fname)
+                            try:
+                                os.remove(fpath)
+                                self.status.emit(f"Deleted: {fpath}")
+                            except Exception as e:
+                                self.status.emit(f"Error deleting {fpath}: {e}")
+                        for d in dirs:
+                            dpath = os.path.join(root, d)
+                            try:
+                                shutil.rmtree(dpath)
+                                self.status.emit(f"Deleted directory: {dpath}")
+                            except Exception as e:
+                                self.status.emit(f"Error deleting directory {dpath}: {e}")
 
                 # If entry is physical/raw we can attempt diskpart clean (very destructive)
                 if self.entry["kind"] in ("physical", "raw"):
