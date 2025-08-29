@@ -1,0 +1,26 @@
+# Cross-platform requirements for Project ASH Secure Formatter
+
+# GUI Framework (choose one)
+PyQt5>=5.15.0
+# PyQt6>=6.0.0  # Alternative to PyQt5
+
+# PDF Generation
+reportlab>=3.6.0
+Pillow>=8.0.0
+
+# System utilities
+psutil>=5.8.0
+
+# Windows-specific (only needed on Windows)
+pywin32>=300; sys_platform == "win32"
+wmi>=1.5.1; sys_platform == "win32"
+
+# Linux-specific utilities (installed via system package manager)
+# On Ubuntu/Debian: sudo apt install parted util-linux coreutils
+# On RHEL/CentOS: sudo yum install parted util-linux coreutils
+# On Arch: sudo pacman -S parted util-linux coreutils
+
+# Development dependencies (optional)
+# pytest>=6.0.0
+# black>=21.0.0
+# flake8>=3.9.0
