@@ -13,181 +13,328 @@ class MainWindow(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(APP_TITLE)
-        self.resize(900, 620)
+        self.resize(1100, 700)
+        
+        # Modern gradient background with glass morphism
         self.setStyleSheet("""
             QWidget {
-                background-color: #1a1a1a;
-                color: #ffffff;
-                font-family: 'Segoe UI', Arial, sans-serif;
-                font-size: 10pt;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #667eea, stop:0.5 #764ba2, stop:1 #f093fb);
+                color: #2c3e50;
+                font-family: 'Inter', 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+                font-size: 14px;
             }
+            
+            /* Glass morphism cards */
             QGroupBox {
-                font-weight: bold;
-                border: 2px solid #404040;
-                border-radius: 8px;
-                margin: 8px 0px;
-                padding: 15px 5px;
-                background-color: #2a2a2a;
+                background: rgba(255, 255, 255, 0.25);
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, 0.18);
+                border-radius: 20px;
+                margin: 12px;
+                padding: 20px 15px;
+                font-weight: 600;
+                font-size: 16px;
+                color: #2c3e50;
             }
+            
             QGroupBox::title {
                 subcontrol-origin: margin;
-                left: 15px;
-                padding: 0 8px 0 8px;
-                color: #ffffff;
-                background-color: #2a2a2a;
+                left: 25px;
+                padding: 8px 20px;
+                background: rgba(255, 255, 255, 0.9);
+                color: #2c3e50;
+                border-radius: 15px;
+                font-weight: 700;
+                font-size: 14px;
+                border: 1px solid rgba(255, 255, 255, 0.3);
             }
+            
+            /* Modern elevated buttons */
             QPushButton {
-                background-color: #404040;
-                color: white;
-                border: 1px solid #606060;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-weight: bold;
+                background: rgba(255, 255, 255, 0.9);
+                color: #2c3e50;
+                border: none;
+                border-radius: 15px;
+                padding: 15px 30px;
+                font-weight: 600;
+                font-size: 14px;
                 min-height: 20px;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             }
+            
             QPushButton:hover {
-                background-color: #505050;
-                border-color: #707070;
+                background: rgba(255, 255, 255, 1);
+                transform: translateY(-2px);
+                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25);
             }
+            
             QPushButton:pressed {
-                background-color: #353535;
+                transform: translateY(0px);
+                background: rgba(255, 255, 255, 0.8);
             }
+            
             QPushButton:disabled {
-                background-color: #2a2a2a;
-                color: #666666;
-                border-color: #333333;
+                background: rgba(255, 255, 255, 0.3);
+                color: rgba(44, 62, 80, 0.5);
             }
-            QComboBox {
-                background-color: #333333;
+            
+            /* Primary action buttons */
+            QPushButton[class="primary"] {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #667eea, stop:1 #764ba2);
                 color: white;
-                border: 1px solid #555555;
-                border-radius: 4px;
-                padding: 6px 12px;
+                font-weight: 700;
+            }
+            
+            QPushButton[class="primary"]:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #5a6fd8, stop:1 #6a4190);
+                box-shadow: 0 10px 25px -5px rgba(102, 126, 234, 0.4);
+            }
+            
+            /* Danger buttons */
+            QPushButton[class="danger"] {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #ff6b6b, stop:1 #ee5a52);
+                color: white;
+                font-weight: 700;
+            }
+            
+            QPushButton[class="danger"]:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #ff5252, stop:1 #e53935);
+                box-shadow: 0 10px 25px -5px rgba(255, 107, 107, 0.4);
+            }
+            
+            /* Modern dropdown */
+            QComboBox {
+                background: rgba(255, 255, 255, 0.9);
+                color: #2c3e50;
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 12px;
+                padding: 12px 16px;
+                font-weight: 500;
                 min-height: 20px;
             }
+            
             QComboBox:hover {
-                border-color: #777777;
-                background-color: #3a3a3a;
+                background: rgba(255, 255, 255, 1);
+                border: 1px solid rgba(102, 126, 234, 0.3);
             }
+            
             QComboBox::drop-down {
                 border: none;
-                width: 20px;
+                width: 30px;
+                padding-right: 10px;
             }
+            
             QComboBox::down-arrow {
-                image: none;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 5px solid #cccccc;
-                margin-right: 5px;
+                width: 12px;
+                height: 12px;
+                border-left: 2px solid #2c3e50;
+                border-bottom: 2px solid #2c3e50;
+                transform: rotate(-45deg);
             }
+            
             QComboBox QAbstractItemView {
-                background-color: #333333;
-                color: white;
-                border: 1px solid #555555;
-                selection-background-color: #555555;
+                background: rgba(255, 255, 255, 0.95);
+                color: #2c3e50;
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 12px;
+                selection-background-color: rgba(102, 126, 234, 0.1);
                 outline: none;
+                padding: 8px;
             }
+            
+            /* Modern input fields */
             QLineEdit {
-                background-color: #333333;
-                color: white;
-                border: 1px solid #555555;
-                border-radius: 4px;
-                padding: 6px 8px;
+                background: rgba(255, 255, 255, 0.9);
+                color: #2c3e50;
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 12px;
+                padding: 12px 16px;
+                font-weight: 500;
                 min-height: 20px;
             }
+            
             QLineEdit:focus {
-                border-color: #777777;
-                background-color: #3a3a3a;
+                background: rgba(255, 255, 255, 1);
+                border: 2px solid rgba(102, 126, 234, 0.5);
             }
+            
+            /* Modern checkbox */
             QCheckBox {
-                color: #ffaaaa;
-                font-weight: bold;
-                spacing: 8px;
+                color: #2c3e50;
+                font-weight: 600;
+                spacing: 12px;
             }
+            
             QCheckBox::indicator {
-                width: 18px;
-                height: 18px;
-                border-radius: 3px;
-                border: 2px solid #555555;
-                background-color: #333333;
+                width: 22px;
+                height: 22px;
+                border-radius: 8px;
+                border: 2px solid rgba(255, 255, 255, 0.5);
+                background: rgba(255, 255, 255, 0.3);
             }
+            
             QCheckBox::indicator:checked {
-                background-color: #ff6b6b;
-                border-color: #ff6b6b;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #667eea, stop:1 #764ba2);
+                border: 2px solid #667eea;
             }
+            
             QCheckBox::indicator:hover {
-                border-color: #777777;
+                border: 2px solid rgba(102, 126, 234, 0.7);
+                background: rgba(255, 255, 255, 0.5);
             }
+            
+            /* Modern text area */
             QTextEdit {
-                background-color: #1a1a1a;
-                color: #cccccc;
-                border: 1px solid #404040;
-                border-radius: 6px;
-                padding: 8px;
-                font-family: 'Consolas', 'Courier New', monospace;
-                font-size: 9pt;
-                line-height: 1.4;
+                background: rgba(255, 255, 255, 0.9);
+                color: #2c3e50;
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 16px;
+                padding: 16px;
+                font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+                font-size: 13px;
+                line-height: 1.6;
+                selection-background-color: rgba(102, 126, 234, 0.3);
             }
+            
+            /* Modern progress bar */
             QProgressBar {
-                background-color: #333333;
-                color: white;
-                border: 1px solid #555555;
-                border-radius: 6px;
+                background: rgba(255, 255, 255, 0.3);
+                color: #2c3e50;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 12px;
                 text-align: center;
-                font-weight: bold;
-                min-height: 25px;
+                font-weight: 600;
+                font-size: 13px;
+                min-height: 24px;
             }
+            
             QProgressBar::chunk {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #4CAF50, stop:1 #45a049);
-                border-radius: 5px;
+                    stop:0 #667eea, stop:1 #764ba2);
+                border-radius: 11px;
+                margin: 1px;
             }
+            
+            /* Modern labels */
             QLabel {
-                color: #ffffff;
+                color: #2c3e50;
+                font-weight: 500;
+            }
+            
+            /* Modern spinbox */
+            QSpinBox {
+                background: rgba(255, 255, 255, 0.9);
+                color: #2c3e50;
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 10px;
+                padding: 8px 12px;
+                font-weight: 500;
+                min-width: 60px;
+            }
+            
+            QSpinBox:focus {
+                background: rgba(255, 255, 255, 1);
+                border: 2px solid rgba(102, 126, 234, 0.5);
+            }
+            
+            QSpinBox::up-button, QSpinBox::down-button {
+                background: rgba(102, 126, 234, 0.1);
+                border: none;
+                border-radius: 6px;
+                width: 24px;
+            }
+            
+            QSpinBox::up-button:hover, QSpinBox::down-button:hover {
+                background: rgba(102, 126, 234, 0.2);
+            }
+            
+            /* Modern scrollbars */
+            QScrollBar:vertical {
+                background: rgba(255, 255, 255, 0.2);
+                width: 10px;
+                border-radius: 5px;
+                margin: 0;
+            }
+            
+            QScrollBar::handle:vertical {
+                background: rgba(102, 126, 234, 0.4);
+                border-radius: 5px;
+                min-height: 20px;
+            }
+            
+            QScrollBar::handle:vertical:hover {
+                background: rgba(102, 126, 234, 0.6);
+            }
+            
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
             }
         """)
 
         v = QtWidgets.QVBoxLayout(self)
-        v.setContentsMargins(20, 20, 20, 20)
-        v.setSpacing(15)
+        v.setContentsMargins(25, 25, 25, 25)
+        v.setSpacing(20)
 
-        # Header (logo + title)
+        # Modern header with clean design
         header = QtWidgets.QHBoxLayout()
-        header.setSpacing(15)
+        header.setSpacing(20)
         
-        # Logo container with background
+        # Elegant logo container
         logo_container = QtWidgets.QFrame()
-        logo_container.setFixedSize(90, 90)
+        logo_container.setFixedSize(80, 80)
         logo_container.setStyleSheet("""
             QFrame {
-                background-color: #333333;
-                border: 2px solid #555555;
-                border-radius: 45px;
+                background: rgba(255, 255, 255, 0.9);
+                border: 3px solid rgba(255, 255, 255, 0.5);
+                border-radius: 40px;
+                backdrop-filter: blur(10px);
             }
         """)
         logo_layout = QtWidgets.QVBoxLayout(logo_container)
-        logo_layout.setContentsMargins(10, 10, 10, 10)
+        logo_layout.setContentsMargins(12, 12, 12, 12)
         
         logo_label = QtWidgets.QLabel()
         logo_label.setAlignment(QtCore.Qt.AlignCenter)
         logo_path = resource_path(LOGO_FILE)
         if os.path.exists(logo_path):
-            pix = QtGui.QPixmap(logo_path).scaledToHeight(60, QtCore.Qt.SmoothTransformation)
+            pix = QtGui.QPixmap(logo_path).scaledToHeight(50, QtCore.Qt.SmoothTransformation)
             logo_label.setPixmap(pix)
         else:
-            # Fallback text logo
-            logo_label.setText("CM")
-            logo_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #ffffff;")
+            # Modern fallback logo
+            logo_label.setText("🔒")
+            logo_label.setStyleSheet("font-size: 28px; color: #667eea;")
         logo_layout.addWidget(logo_label)
         
         header.addWidget(logo_container)
         
-        # Title and subtitle
+        # Clean title section
         title_container = QtWidgets.QVBoxLayout()
-        title_lbl = QtWidgets.QLabel(f"<b>{COMPANY_NAME}</b>")
-        title_lbl.setStyleSheet("font-size: 24px; font-weight: bold; color: #ffffff; margin: 0;")
-        subtitle_lbl = QtWidgets.QLabel("Secure Drive Formatter & Certificate Generator")
-        subtitle_lbl.setStyleSheet("font-size: 14px; color: #cccccc; margin: 0;")
+        title_container.setSpacing(8)
+        
+        title_lbl = QtWidgets.QLabel(f"{COMPANY_NAME}")
+        title_lbl.setStyleSheet("""
+            font-size: 28px; 
+            font-weight: 700; 
+            color: rgba(255, 255, 255, 0.95); 
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        """)
+        
+        subtitle_lbl = QtWidgets.QLabel("Secure Drive Formatter")
+        subtitle_lbl.setStyleSheet("""
+            font-size: 16px; 
+            color: rgba(255, 255, 255, 0.8); 
+            margin: 0;
+            font-weight: 400;
+        """)
+        
         title_container.addWidget(title_lbl)
         title_container.addWidget(subtitle_lbl)
         title_container.addStretch()
@@ -195,29 +342,50 @@ class MainWindow(QtWidgets.QWidget):
         header.addLayout(title_container)
         header.addStretch()
         
-        # Version info
-        version_lbl = QtWidgets.QLabel("v2.0")
-        version_lbl.setStyleSheet("font-size: 11px; color: #888888; font-weight: bold;")
-        version_lbl.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignRight)
-        header.addWidget(version_lbl)
-        
-        v.addLayout(header)
-
-        # Drive selection area
-        drive_group = QtWidgets.QGroupBox("🔧 Target Drive Selection")
-        drive_group.setStyleSheet("""
-            QGroupBox {
-                font-size: 12pt;
-                font-weight: bold;
-                color: #ffffff;
+        # Elegant version badge
+        version_container = QtWidgets.QFrame()
+        version_container.setStyleSheet("""
+            QFrame {
+                background: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 15px;
+                padding: 8px 16px;
             }
         """)
-        drive_layout = QtWidgets.QVBoxLayout(drive_group)
-        drive_layout.setSpacing(12)
+        version_layout = QtWidgets.QHBoxLayout(version_container)
+        version_layout.setContentsMargins(12, 8, 12, 8)
+        
+        version_lbl = QtWidgets.QLabel("v2.3")
+        version_lbl.setStyleSheet("""
+            color: rgba(255, 255, 255, 0.9); 
+            font-size: 13px; 
+            font-weight: 600;
+        """)
+        version_layout.addWidget(version_lbl)
+        
+        header.addWidget(version_container)
+        v.addLayout(header)
 
-        # Drive selection row
-        drive_row = QtWidgets.QHBoxLayout()
-        drive_row.setSpacing(10)
+        # Main content with modern layout
+        content_area = QtWidgets.QHBoxLayout()
+        content_area.setSpacing(25)
+        
+        # Left column - Drive selection and security options
+        left_column = QtWidgets.QVBoxLayout()
+        left_column.setSpacing(20)
+        
+        # Modern drive selection
+        drive_group = QtWidgets.QGroupBox("🖥️  Drive Selection")
+        drive_layout = QtWidgets.QVBoxLayout(drive_group)
+        drive_layout.setSpacing(15)
+        
+        drive_instruction = QtWidgets.QLabel("Choose the drive to securely wipe:")
+        drive_instruction.setStyleSheet("""
+            color: #2c3e50; 
+            font-weight: 500; 
+            font-size: 14px;
+            margin-bottom: 5px;
+        """)
         
         drive_label = QtWidgets.QLabel("Select Target:")
         drive_label.setStyleSheet("font-weight: bold; color: #ffffff; font-size: 11pt;")
