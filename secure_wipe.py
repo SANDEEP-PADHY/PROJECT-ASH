@@ -8,8 +8,62 @@ import tempfile
 import subprocess
 import time
 import datetime
+import string
 from PyQt5 import QtCore
 from certificate import generate_certificate
+
+def find_drive_letter_by_label(label="WIPED_DRIVE"):
+    """Find drive letter by volume label"""
+    try:
+        import win32api
+        drives = win32api.GetLogicalDriveStrings()
+        drives = drives.split('\000')[:-1]
+        for drive in drives:
+            try:
+                vol_info = win32api.GetVolumeInformation(drive)
+                if vol_info[0] == label:
+                    return drive
+            except Exception:
+                continue
+    except ImportError:
+        # Fallback method using subprocess
+        try:
+            result = subprocess.run(['wmic', 'logicaldisk', 'get', 'size,freespace,caption,volumename'], 
+                                  capture_output=True, text=True, shell=True)
+            if result.returncode == 0:
+                lines = result.stdout.strip().split('\n')
+                for line in lines[1:]:  # Skip header
+                    if label in line:
+                        parts = line.split()
+                        for part in parts:
+                            if ':' in part and len(part) == 2:
+                                return part + '\\'
+        except Exception:
+            pass
+    return None
+
+def refresh_explorer():
+    """Refresh Windows Explorer to show newly formatted drives"""
+    try:
+        # Send broadcast message to refresh explorer
+        import ctypes
+        from ctypes import wintypes
+        
+        HWND_BROADCAST = 0xFFFF
+        WM_SETTINGCHANGE = 0x001A
+        
+        ctypes.windll.user32.SendMessageTimeoutW(
+            HWND_BROADCAST, WM_SETTINGCHANGE, 0, 0,
+            0, 1000, None
+        )
+        
+        # Also try refreshing the desktop
+        ctypes.windll.user32.SendMessageTimeoutW(
+            ctypes.windll.user32.FindWindowW("Progman", None),
+            WM_SETTINGCHANGE, 0, 0, 0, 1000, None
+        )
+    except Exception:
+        pass
 
 class WipeWorker(QtCore.QObject):
     progress = QtCore.pyqtSignal(int)            # 0-100
@@ -63,57 +117,122 @@ class WipeWorker(QtCore.QObject):
                 step_update("Simulation: Creating junk archive ...", steps[4][1])
                 step_update("Simulation: Final format ...", steps[5][1])
             else:
+                self.status.emit(f"REAL MODE: Starting destructive operations on {device}")
+                
+                # Check admin privileges
+                try:
+                    import ctypes
+                    is_admin = ctypes.windll.shell32.IsUserAnAdmin()
+                    if not is_admin:
+                        self.status.emit("WARNING: Not running as administrator - some operations may fail")
+                        self.errors.append("Not running as administrator")
+                except Exception:
+                    pass
+                
                 # Overwrite files
                 step_update("Overwriting files with random data...", steps[1][1])
+                files_overwritten = 0
                 if ":" in device and os.path.exists(device):
+                    self.status.emit(f"Starting file overwrite on {device}")
                     for root, dirs, files in os.walk(device, topdown=False):
                         for fname in files:
                             fpath = os.path.join(root, fname)
                             try:
-                                size = os.path.getsize(fpath)
-                                with open(fpath, "r+b") as f:
-                                    for _ in range(self.passes):
-                                        f.seek(0)
-                                        f.write(os.urandom(size))
-                                        f.flush()
-                                self.status.emit(f"Overwritten: {fpath}")
+                                if os.path.exists(fpath):
+                                    size = os.path.getsize(fpath)
+                                    if size > 0:  # Only overwrite non-empty files
+                                        with open(fpath, "r+b") as f:
+                                            for pass_num in range(self.passes):
+                                                f.seek(0)
+                                                # Write in chunks for large files
+                                                remaining = size
+                                                while remaining > 0:
+                                                    chunk_size = min(1024 * 1024, remaining)  # 1MB chunks
+                                                    f.write(os.urandom(chunk_size))
+                                                    remaining -= chunk_size
+                                                f.flush()
+                                                os.fsync(f.fileno())  # Force write to disk
+                                        files_overwritten += 1
+                                        if files_overwritten % 100 == 0:
+                                            self.status.emit(f"Overwritten {files_overwritten} files...")
+                            except PermissionError:
+                                self.status.emit(f"Permission denied: {fpath}")
+                                self.errors.append(f"Permission denied: {fpath}")
                             except Exception as e:
                                 self.status.emit(f"Error overwriting {fpath}: {e}")
                                 self.errors.append(str(e))
+                    self.status.emit(f"Total files overwritten: {files_overwritten}")
+                else:
+                    self.status.emit(f"Device {device} not accessible for file operations")
+                    
                 # Delete files
-                step_update("Deleting files & metadata (best-effort)...", steps[2][1])
+                step_update("Deleting files & metadata...", steps[2][1])
+                files_deleted = 0
                 if ":" in device and os.path.exists(device):
+                    self.status.emit(f"Starting file deletion on {device}")
                     for root, dirs, files in os.walk(device, topdown=False):
                         for fname in files:
                             fpath = os.path.join(root, fname)
                             try:
-                                os.remove(fpath)
-                                self.status.emit(f"Deleted: {fpath}")
+                                if os.path.exists(fpath):
+                                    os.remove(fpath)
+                                    files_deleted += 1
+                                    if files_deleted % 100 == 0:
+                                        self.status.emit(f"Deleted {files_deleted} files...")
+                            except PermissionError:
+                                self.status.emit(f"Permission denied deleting: {fpath}")
+                                self.errors.append(f"Permission denied deleting: {fpath}")
                             except Exception as e:
                                 self.status.emit(f"Error deleting {fpath}: {e}")
                                 self.errors.append(str(e))
                         for d in dirs:
                             dpath = os.path.join(root, d)
                             try:
-                                shutil.rmtree(dpath)
-                                self.status.emit(f"Deleted directory: {dpath}")
+                                if os.path.exists(dpath):
+                                    shutil.rmtree(dpath)
+                            except PermissionError:
+                                self.status.emit(f"Permission denied deleting directory: {dpath}")
+                                self.errors.append(f"Permission denied deleting directory: {dpath}")
                             except Exception as e:
                                 self.status.emit(f"Error deleting directory {dpath}: {e}")
                                 self.errors.append(str(e))
+                    self.status.emit(f"Total files deleted: {files_deleted}")
+                else:
+                    self.status.emit(f"Device {device} not accessible for file deletion")
                 # Diskpart for physical/raw
                 if self.entry["kind"] in ("physical", "raw"):
-                    step_update("Attempting low-level clean (diskpart)", 2)
+                    step_update("Attempting low-level clean and partition creation (diskpart)", 2)
                     try:
                         idx = self.entry.get("index")
                         if idx is not None:
-                            script = f"select disk {idx}\nclean\ncreate partition primary\nformat fs=ntfs quick\nassign\nexit\n"
+                            # Enhanced diskpart script to ensure drive is visible after format
+                            script = f"""select disk {idx}
+clean
+create partition primary
+active
+format fs=ntfs quick label="WIPED_DRIVE"
+assign
+exit
+"""
                             with open("diskpart_script.txt", "w") as f:
                                 f.write(script)
-                            subprocess.run(["diskpart", "/s", "diskpart_script.txt"], check=False, shell=True)
+                            # run diskpart with better error handling
+                            result = subprocess.run(["diskpart", "/s", "diskpart_script.txt"], 
+                                                   capture_output=True, text=True, shell=True)
+                            self.status.emit(f"Diskpart completed with code: {result.returncode}")
+                            if result.stdout:
+                                self.status.emit(f"Diskpart output: {result.stdout.strip()}")
+                            if result.stderr and result.stderr.strip():
+                                self.status.emit(f"Diskpart warnings: {result.stderr.strip()}")
                             try:
                                 os.remove("diskpart_script.txt")
                             except Exception:
                                 pass
+                            
+                            # Refresh Windows Explorer to make drive visible
+                            time.sleep(1)
+                            refresh_explorer()
+                            self.status.emit("Refreshed Windows Explorer to show formatted drive")
                     except Exception as e:
                         self.status.emit(f"Diskpart error: {e}")
                         self.errors.append(str(e))
@@ -158,17 +277,43 @@ class WipeWorker(QtCore.QObject):
                 try:
                     if self.entry["kind"] in ("logical"):
                         vol = self.entry["device"].rstrip("\\")
-                        cmd = f'format {vol} /FS:NTFS /Q /Y'
-                        subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        # Use more robust formatting command
+                        cmd = f'format {vol} /FS:NTFS /Q /V:WIPED_DRIVE /Y'
+                        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                        self.status.emit(f"Format command result: {result.returncode}")
+                        if result.stdout:
+                            self.status.emit(f"Format output: {result.stdout.strip()}")
+                        if result.stderr and result.stderr.strip():
+                            self.status.emit(f"Format warnings: {result.stderr.strip()}")
+                        
+                        # Refresh explorer after logical format too
+                        time.sleep(1)
+                        refresh_explorer()
+                        self.status.emit("Refreshed Windows Explorer after logical format")
+                        
                     elif self.entry["kind"] in ("physical", "raw"):
-                        pass
+                        # Physical drives were already handled by diskpart above
+                        self.status.emit("Physical drive formatting completed via diskpart")
                 except Exception as e:
                     self.status.emit(f"Format error: {e}")
                     self.errors.append(str(e))
-            # Certificate only if no errors
+            # Certificate only if no errors - save to the formatted drive
             step_update("Generating certificate...", steps[6][1])
             if not self.errors:
-                cert = generate_certificate(self.entry)
+                # Try to find the newly formatted drive
+                target_drive = None
+                if self.entry["kind"] in ("physical", "raw"):
+                    # Wait a moment for drive to be recognized
+                    time.sleep(2)
+                    target_drive = find_drive_letter_by_label("WIPED_DRIVE")
+                    if target_drive:
+                        self.status.emit(f"Found formatted drive at: {target_drive}")
+                    else:
+                        self.status.emit("Could not locate formatted drive, saving certificate to current directory")
+                elif self.entry["kind"] == "logical" and ":" in self.entry["device"]:
+                    target_drive = self.entry["device"]
+                
+                cert = generate_certificate(self.entry, target_drive)
                 self.finished.emit(cert)
             else:
                 self.finished.emit(f"ERROR: Wipe completed with errors: {self.errors}")

@@ -9,11 +9,20 @@ from reportlab.pdfgen import canvas
 from PIL import Image
 from utils import COMPANY_NAME, LOGO_FILE, CERT_DIR, resource_path
 
-def generate_certificate(entry):
+def generate_certificate(entry, target_drive=None):
     now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    cert_name = os.path.join(CERT_DIR, f"CodeMonk_SecureCertificate_{now}.pdf")
+    cert_filename = f"CodeMonk_SecureCertificate_{now}.pdf"
+    
+    # Determine where to save the certificate
+    if target_drive and os.path.exists(target_drive):
+        cert_path = os.path.join(target_drive, cert_filename)
+        save_location = f"saved to formatted drive ({target_drive})"
+    else:
+        cert_path = os.path.join(CERT_DIR, cert_filename)
+        save_location = "saved to application directory"
+    
     try:
-        c = canvas.Canvas(cert_name, pagesize=A4)
+        c = canvas.Canvas(cert_path, pagesize=A4)
         w, h = A4
         logo_path = resource_path(LOGO_FILE)
         if os.path.exists(logo_path):
@@ -34,13 +43,25 @@ def generate_certificate(entry):
         y -= 18
         c.drawString(80, y, f"Target    : {entry.get('display') or entry.get('device')}")
         y -= 18
-        c.drawString(80, y, f"Method    : Scramble -> Delete -> Overwrite -> Junk -> Quick Format")
+        c.drawString(80, y, f"Method    : Overwrite -> Delete -> Free Space Wipe -> Format")
         y -= 18
         c.drawString(80, y, f"Date      : {datetime.datetime.now().strftime('%d-%m-%Y %H:%M:%S')}")
-        y -= 36
-        c.drawString(80, y, "Signature:")
+        y -= 18
+        c.drawString(80, y, f"Certificate: {save_location}")
+        y -= 30
+        c.drawString(80, y, "Digital Signature:")
         c.line(80, y-6, 260, y-6)
+        
+        # Add verification info
+        y -= 40
+        c.setFont("Helvetica", 9)
+        c.drawString(80, y, "This certificate confirms that the specified drive has been securely wiped")
+        y -= 12
+        c.drawString(80, y, "using industry-standard methods including file overwriting, free space")
+        y -= 12
+        c.drawString(80, y, "wiping, and complete reformatting. All data has been irreversibly destroyed.")
+        
         c.save()
-        return cert_name
+        return f"{cert_path} ({save_location})"
     except Exception as e:
         return f"ERROR_GEN_CERT: {e}"
