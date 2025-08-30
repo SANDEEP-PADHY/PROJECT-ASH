@@ -23,45 +23,89 @@ def is_admin():
         return os.geteuid() == 0
 
 def detect_linux_drives():
-    """Detect drives on Linux using multiple methods"""
+    """Detect drives on Linux using multiple methods with robust error handling"""
     drives = []
     
     # Method 1: Use lsblk command (most reliable)
+    print("[DEBUG] Attempting lsblk drive detection...")
     try:
-        result = subprocess.run(['lsblk', '-J', '-o', 'NAME,SIZE,TYPE,MOUNTPOINT,MODEL'], 
-                              capture_output=True, text=True, check=True)
-        data = json.loads(result.stdout)
+        # Check if lsblk exists
+        check_result = subprocess.run(['which', 'lsblk'], capture_output=True, text=True)
+        if check_result.returncode != 0:
+            print("[DEBUG] lsblk command not found, trying alternative methods")
+            raise FileNotFoundError("lsblk not available")
         
-        for device in data.get('blockdevices', []):
-            if device['type'] == 'disk':
+        result = subprocess.run(['lsblk', '-J', '-o', 'NAME,SIZE,TYPE,MOUNTPOINT,MODEL'], 
+                              capture_output=True, text=True, timeout=10)
+        
+        print(f"[DEBUG] lsblk exit code: {result.returncode}")
+        print(f"[DEBUG] lsblk stdout length: {len(result.stdout)}")
+        
+        if result.returncode != 0:
+            print(f"[DEBUG] lsblk stderr: {result.stderr}")
+            raise subprocess.CalledProcessError(result.returncode, 'lsblk')
+        
+        if not result.stdout.strip():
+            print("[DEBUG] lsblk returned empty output")
+            raise ValueError("Empty lsblk output")
+        
+        # Debug: print raw output
+        print(f"[DEBUG] Raw lsblk output: {result.stdout[:200]}...")
+        
+        try:
+            data = json.loads(result.stdout)
+        except json.JSONDecodeError as e:
+            print(f"[DEBUG] JSON parse error: {e}")
+            print(f"[DEBUG] Raw output: {result.stdout}")
+            raise
+        
+        blockdevices = data.get('blockdevices', [])
+        print(f"[DEBUG] Found {len(blockdevices)} block devices")
+        
+        for device in blockdevices:
+            device_type = device.get('type', 'unknown')
+            device_name = device.get('name', 'unknown')
+            print(f"[DEBUG] Processing device: {device_name} (type: {device_type})")
+            
+            if device_type == 'disk':
                 size_bytes = parse_size(device.get('size', '0'))
                 size_gb = size_bytes // (1024**3) if size_bytes else 0
+                model = device.get('model') or 'Unknown Device'
                 
                 drives.append({
                     "kind": "physical",
-                    "device": f"/dev/{device['name']}",
-                    "model": device.get('model', 'Unknown'),
+                    "device": f"/dev/{device_name}",
+                    "model": model,
                     "size_gb": size_gb,
-                    "display": f"/dev/{device['name']} - {device.get('model', 'Unknown')} ({size_gb} GB)"
+                    "display": f"/dev/{device_name} - {model} ({size_gb} GB)"
                 })
                 
                 # Add partitions as logical drives
-                for child in device.get('children', []):
-                    if child['type'] == 'part':
+                children = device.get('children', [])
+                print(f"[DEBUG] Device {device_name} has {len(children)} partitions")
+                
+                for child in children:
+                    if child.get('type') == 'part':
+                        part_name = child.get('name', 'unknown')
                         part_size = parse_size(child.get('size', '0'))
                         part_gb = part_size // (1024**3) if part_size else 0
-                        mountpoint = child.get('mountpoint', 'Not mounted')
+                        mountpoint = child.get('mountpoint') or 'Not mounted'
                         
                         drives.append({
                             "kind": "logical",
-                            "device": f"/dev/{child['name']}",
-                            "parent_physical": f"/dev/{device['name']}",
+                            "device": f"/dev/{part_name}",
+                            "parent_physical": f"/dev/{device_name}",
                             "size_gb": part_gb,
                             "mountpoint": mountpoint,
-                            "display": f"/dev/{child['name']} - Partition ({part_gb} GB) - {mountpoint}"
+                            "display": f"/dev/{part_name} - Partition ({part_gb} GB) - {mountpoint}"
                         })
-    except Exception as e:
-        print(f"lsblk detection failed: {e}")
+        
+        print(f"[DEBUG] lsblk method found {len(drives)} drives")
+        
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired, 
+            json.JSONDecodeError, ValueError) as e:
+        print(f"[DEBUG] lsblk detection failed: {e}")
+        drives = []
     
     # Method 2: Parse /proc/partitions as fallback
     if not drives:
@@ -87,16 +131,143 @@ def detect_linux_drives():
     return drives
 
 def detect_windows_drives():
-    """Original Windows drive detection"""
+    """Enhanced Windows drive detection with multiple methods"""
     import ctypes
     import string
-    try:
-        import wmi
-    except ImportError:
-        return []
-    
     drives = []
-    # ... (keep original Windows code)
+    
+    print("[DEBUG] Starting Windows drive detection...")
+    
+    # Method 1: PowerShell Get-PhysicalDisk (modern approach)
+    try:
+        print("[DEBUG] Trying PowerShell Get-PhysicalDisk...")
+        ps_cmd = [
+            'powershell', '-Command',
+            'Get-PhysicalDisk | ConvertTo-Json -Depth 2'
+        ]
+        result = subprocess.run(ps_cmd, capture_output=True, text=True, timeout=15)
+        
+        if result.returncode == 0 and result.stdout.strip():
+            print(f"[DEBUG] PowerShell output length: {len(result.stdout)}")
+            try:
+                ps_data = json.loads(result.stdout)
+                if not isinstance(ps_data, list):
+                    ps_data = [ps_data]  # Single disk case
+                
+                for disk in ps_data:
+                    size_bytes = disk.get('Size', 0)
+                    size_gb = int(size_bytes) // (1024**3) if size_bytes else 0
+                    model = disk.get('FriendlyName', 'Unknown Drive')
+                    device_id = disk.get('DeviceId', 0)
+                    
+                    drives.append({
+                        "kind": "physical",
+                        "device": f"\\.\PhysicalDrive{device_id}",
+                        "model": model,
+                        "size_gb": size_gb,
+                        "display": f"PhysicalDrive{device_id} - {model} ({size_gb} GB)",
+                        "index": device_id
+                    })
+                
+                print(f"[DEBUG] PowerShell method found {len(drives)} drives")
+            except json.JSONDecodeError as e:
+                print(f"[DEBUG] PowerShell JSON parse error: {e}")
+        else:
+            print(f"[DEBUG] PowerShell failed: {result.stderr}")
+    
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"[DEBUG] PowerShell method failed: {e}")
+    
+    # Method 2: WMI fallback (if available)
+    if not drives:
+        try:
+            print("[DEBUG] Trying WMI method...")
+            import wmi
+            c = wmi.WMI()
+            
+            for disk in c.Win32_DiskDrive():
+                size_bytes = int(disk.Size) if disk.Size else 0
+                size_gb = size_bytes // (1024**3) if size_bytes else 0
+                model = disk.Caption or disk.Model or "Physical Disk"
+                device_id = disk.DeviceID  # like '\\.\PHYSICALDRIVE0'
+                index = int(disk.Index) if disk.Index is not None else 0
+                
+                drives.append({
+                    "kind": "physical",
+                    "device": device_id,
+                    "model": model,
+                    "size_gb": size_gb,
+                    "display": f"PhysicalDrive{index} - {model} ({size_gb} GB)",
+                    "index": index
+                })
+            
+            print(f"[DEBUG] WMI method found {len(drives)} drives")
+            
+        except ImportError:
+            print("[DEBUG] WMI not available")
+        except Exception as e:
+            print(f"[DEBUG] WMI method failed: {e}")
+    
+    # Method 3: Direct ctypes probing for PhysicalDrive devices
+    if not drives:
+        print("[DEBUG] Trying direct PhysicalDrive probing...")
+        for i in range(32):  # Check first 32 physical drives
+            device_path = f"\\.\PhysicalDrive{i}"
+            try:
+                # Try to open the device handle
+                handle = ctypes.windll.kernel32.CreateFileW(
+                    device_path,
+                    0,  # No access needed, just check existence
+                    3,  # FILE_SHARE_READ | FILE_SHARE_WRITE
+                    None,
+                    3,  # OPEN_EXISTING
+                    0,
+                    None
+                )
+                
+                if handle != -1:  # INVALID_HANDLE_VALUE
+                    ctypes.windll.kernel32.CloseHandle(handle)
+                    drives.append({
+                        "kind": "physical",
+                        "device": device_path,
+                        "model": f"Physical Drive {i}",
+                        "size_gb": 0,  # Size unknown with this method
+                        "display": f"PhysicalDrive{i} - Physical Drive ({i})",
+                        "index": i
+                    })
+            except Exception:
+                continue  # Drive doesn't exist or no access
+        
+        print(f"[DEBUG] Direct probing found {len(drives)} drives")
+    
+    # Method 4: Add logical drives
+    print("[DEBUG] Adding logical drives...")
+    logical_count = 0
+    try:
+        bitmask = ctypes.windll.kernel32.GetLogicalDrives()
+        for i, letter in enumerate(string.ascii_uppercase):
+            if bitmask & (1 << i):
+                drive_path = f"{letter}:\\"
+                drive_type = ctypes.windll.kernel32.GetDriveTypeW(ctypes.c_wchar_p(drive_path))
+                
+                # Only include fixed drives (type 3) and removable (type 2)
+                if drive_type in [2, 3]:
+                    type_name = "Fixed" if drive_type == 3 else "Removable"
+                    drives.append({
+                        "kind": "logical",
+                        "device": drive_path,
+                        "model": f"{type_name} Drive",
+                        "size_gb": 0,
+                        "display": f"{letter}: - {type_name} Drive",
+                        "drive_type": drive_type
+                    })
+                    logical_count += 1
+    except Exception as e:
+        print(f"[DEBUG] Logical drive detection failed: {e}")
+    
+    print(f"[DEBUG] Added {logical_count} logical drives")
+    print(f"[DEBUG] Total Windows drives found: {len(drives)}")
+    
     return drives
 
 def detect_drives():

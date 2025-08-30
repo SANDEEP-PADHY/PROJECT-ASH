@@ -1,8 +1,12 @@
 # Cross-platform requirements for Project ASH Secure Formatter
 
-# GUI Framework (choose one)
+# GUI Frameworks (auto-detected by ui_launcher.py)
+# Primary: PyQt5 or PyQt6 (recommended for best experience)
 PyQt5>=5.15.0
 # PyQt6>=6.0.0  # Alternative to PyQt5
+
+# Fallback: tkinter (usually included with Python)
+# No additional installation needed for tkinter
 
 # PDF Generation
 reportlab>=3.6.0
@@ -24,3 +28,9 @@ wmi>=1.5.1; sys_platform == "win32"
 # pytest>=6.0.0
 # black>=21.0.0
 # flake8>=3.9.0
+
+# Minimal requirements (console-only mode)
+# If you only need console interface, you can install just:
+# reportlab>=3.6.0
+# Pillow>=8.0.0
+# psutil>=5.8.0
